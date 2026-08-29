@@ -6,8 +6,8 @@ A self-contained Retrieval-Augmented Generation (RAG) API that answers questions
 
 ```
 ┌─────────────┐      ┌──────────────┐      ┌─────────────┐
-│   Client /   │─────▶│   FastAPI    │─────▶│   Qdrant    │
-│  curl / UI   │◀─────│  (Docker)    │◀─────│  (Docker)   │
+│   Client /  │────▶│   FastAPI    │─────▶│   Qdrant    │
+│  curl / UI  │◀────│  (Docker)    │◀─────│  (Docker)   │
 └─────────────┘      └──────┬───────┘      └─────────────┘
                              │
                              ▼
