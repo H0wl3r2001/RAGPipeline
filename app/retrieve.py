@@ -7,6 +7,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
 from app.config import settings
+from app.generate import ModelNotPulledError
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,8 @@ def embed_query(question: str) -> list[float]:
         json={"model": settings.embed_model, "input": question},
         timeout=120.0,
     )
+    if resp.status_code == 404:
+        raise ModelNotPulledError(settings.embed_model)
     resp.raise_for_status()
     return resp.json()["embeddings"][0]
 

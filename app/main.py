@@ -2,7 +2,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from app.config import settings
-from app.generate import generate_answer
+from app.generate import generate_answer, ModelNotPulledError
 from app.ingest import run_ingest
 from app.models import IngestResponse, QueryRequest, QueryResponse
 from app.retrieve import retrieve
@@ -51,6 +51,8 @@ def query(req: QueryRequest):
         chunks = retrieve(req.question)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ModelNotPulledError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Embedding service error: {e}")
     except Exception as e:
@@ -58,6 +60,8 @@ def query(req: QueryRequest):
 
     try:
         answer = generate_answer(req.question, chunks)
+    except ModelNotPulledError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Generation service error: {e}")
     except Exception as e:
