@@ -1,0 +1,51 @@
+"""Prompt construction + Ollama generation."""
+
+import logging
+
+import httpx
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+PROMPT_TEMPLATE = """Answer the question using only the context below.
+If the context does not contain enough information to answer, say "I don't know."
+Do not use any outside knowledge.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:"""
+
+
+def build_prompt(question: str, chunks: list[dict]) -> str:
+    """Construct the RAG prompt from retrieved chunks and the question."""
+    context_parts = [
+        f"[{i + 1}] (source: {c['file']}, chunk {c['chunk_index']})\n{c['text']}"
+        for i, c in enumerate(chunks)
+    ]
+    context = "\n\n".join(context_parts)
+    return PROMPT_TEMPLATE.format(context=context, question=question)
+
+
+def generate_answer(question: str, chunks: list[dict]) -> str:
+    """Build the prompt and call Ollama /api/generate for an answer.
+
+    Raises httpx.HTTPError if Ollama is unreachable or returns an error.
+    """
+    prompt = build_prompt(question, chunks)
+    logger.info("Calling Ollama model '%s' for generation", settings.ollama_model)
+
+    resp = httpx.post(
+        f"{settings.ollama_url}/api/generate",
+        json={
+            "model": settings.ollama_model,
+            "prompt": prompt,
+            "stream": False,
+        },
+        timeout=600.0,
+    )
+    resp.raise_for_status()
+    return resp.json()["response"].strip()

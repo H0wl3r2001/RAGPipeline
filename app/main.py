@@ -2,8 +2,10 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from app.config import settings
+from app.generate import generate_answer
 from app.ingest import run_ingest
-from app.models import IngestResponse
+from app.models import IngestResponse, QueryRequest, QueryResponse
+from app.retrieve import retrieve
 
 app = FastAPI(title="Local RAG Service", version="0.1.0")
 
@@ -37,3 +39,34 @@ def ingest():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return IngestResponse(status="ok", **result)
+
+
+@app.post("/query", response_model=QueryResponse)
+def query(req: QueryRequest):
+    """Answer a question using retrieved context from the vector store."""
+    if not req.question.strip():
+        raise HTTPException(status_code=400, detail="question must not be empty")
+
+    try:
+        chunks = retrieve(req.question)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Embedding service error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    try:
+        answer = generate_answer(req.question, chunks)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Generation service error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return QueryResponse(
+        answer=answer,
+        sources=[
+            {"file": c["file"], "chunk_index": c["chunk_index"], "score": c["score"]}
+            for c in chunks
+        ],
+    )

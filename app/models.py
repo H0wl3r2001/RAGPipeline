@@ -8,3 +8,18 @@ class IngestResponse(BaseModel):
     documents: int
     chunks: int
     upserted: int
+
+
+class QueryRequest(BaseModel):
+    question: str
+
+
+class Source(BaseModel):
+    file: str
+    chunk_index: int
+    score: float
+
+
+class QueryResponse(BaseModel):
+    answer: str
+    sources: list[Source]
