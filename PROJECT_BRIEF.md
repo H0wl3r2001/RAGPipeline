@@ -83,7 +83,18 @@ RAGPipeline/
     └── test_api.py              # a few basic smoke tests (health check, ingest, query)
 ```
 
-Only `app/` gets a Dockerfile — `qdrant` and `ollama` run from official prebuilt images in `docker-compose.yml`, so they don't need one of their own. `eval/` and `tests/` are deliberately **not** containerized: both just make HTTP calls against the already-running stack, so a local venv (`python -m venv eval/.venv && eval/.venv/bin/pip install -r eval/requirements.txt`) gets the same repeatable setup as a Dockerfile would, without an extra image, a compose entry, and network wiring to reach the app container.
+Only `app/` gets a Dockerfile — `qdrant` and `ollama` run from official prebuilt images in `docker-compose.yml`, so they don't need one of their own. `eval/` and `tests/` do **not** get their own Dockerfile or compose service — both just make HTTP calls against the already-running stack. Do **not** use a local venv (`python -m venv`) for these: that requires `python3-venv`/`pip` to be installed on the WSL host outside any project, which conflicts with this environment's "don't install runtimes on the base system" rule. Instead, run them via an ephemeral container that installs nothing persistent:
+
+```bash
+docker run --rm \
+  --network ragpipeline_default \
+  -v "$(pwd)/eval:/eval" -w /eval \
+  -v eval_pip_cache:/root/.cache/pip \
+  python:3.12-slim \
+  bash -c "pip install -q -r requirements.txt && python eval.py"
+```
+
+(Same pattern for `tests/test_api.py`, swapping the mounted directory and command.) The `eval_pip_cache` named volume just speeds up repeat runs — it's optional. Document this exact command in the README so it's copy-pasteable; nothing about it needs a Dockerfile or a compose entry, so it stays consistent with keeping `eval/`/`tests/` out of the main stack.
 
 `.gitignore` must include, at minimum: `.env` (only `.env.example` is committed — never the real `.env`), `data/*` with a negation for `data/.gitkeep`, `eval/.venv/`, `__pycache__/`, and `*.pyc`. Create `.gitignore` as the very first file in Phase 1, before any other file that might contain a secret or generated artifact — do not defer it to Phase 5 polish.
 
@@ -126,6 +137,7 @@ Work through these in order. Each phase should leave the system in a runnable st
   - For each question, call `/query`, check whether the expected source document appears in `sources` → **retrieval hit-rate**.
   - Default the answer-relevance check to simple keyword/substring matching — no extra dependency needed. If you want embedding-similarity instead, call whichever embedding backend `app/` already settled on over HTTP (e.g. Ollama's `/api/embed`) rather than installing `sentence-transformers` a second time in `eval/requirements.txt` — no need to duplicate a heavy dependency the app already carries in-process.
   - Print a summary table at the end.
+- Run `eval/eval.py` (and `tests/test_api.py`) via the ephemeral `docker run` command in section 5 — do not create a local venv or install Python packages on the host.
 
 ### Phase 5 — Polish
 - `README.md`: architecture summary (reuse section 4 diagram), setup steps, one paragraph on a real design decision made (e.g. "chose fixed-size chunking over semantic chunking for simplicity; noted as a possible improvement"), and sample `curl` commands.
@@ -140,7 +152,7 @@ Work through these in order. Each phase should leave the system in a runnable st
 - No fancy chunking (semantic chunking, sliding-window optimization) — note it as a "future improvement" in the README instead of building it.
 - No frontend framework — a single static HTML file at most, or skip UI entirely.
 - No GPU passthrough for the Ollama container as part of the core build (see hardware note in section 3) — evidence strongly suggests AMD GPU passthrough into WSL2 Docker containers is currently unreliable, not just untested, so it's reasonable to skip it entirely rather than treat it as a stretch goal worth spending time on.
-- No containerization of `eval/` or `tests/` — both are simple scripts that call the already-running stack over HTTP; a local venv is sufficient and avoids extra Dockerfiles, compose entries, and network wiring for no functional benefit.
+- No persistent Dockerfile or compose service for `eval/` or `tests/` — both are simple scripts that call the already-running stack over HTTP; an ephemeral `docker run` (section 5) gets the same host isolation as a Dockerfile would without the extra image or compose entry, and without installing Python on the WSL host the way a local venv would require.
 
 ## 8. Notes for the Agent
 
