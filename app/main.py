@@ -1,7 +1,9 @@
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from app.config import settings
+from app.ingest import run_ingest
+from app.models import IngestResponse
 
 app = FastAPI(title="Local RAG Service", version="0.1.0")
 
@@ -21,3 +23,17 @@ async def health():
         except httpx.HTTPError as e:
             status["qdrant"] = f"unreachable: {e}"
     return status
+
+
+@app.post("/ingest", response_model=IngestResponse)
+def ingest():
+    """Re-ingest all documents from data/ into the vector store."""
+    try:
+        result = run_ingest()
+    except (FileNotFoundError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Embedding service error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return IngestResponse(status="ok", **result)
