@@ -143,6 +143,7 @@ Work through these in order. Each phase should leave the system in a runnable st
 - `README.md`: architecture summary (reuse section 4 diagram), setup steps, one paragraph on a real design decision made (e.g. "chose fixed-size chunking over semantic chunking for simplicity; noted as a possible improvement"), and sample `curl` commands.
 - Basic error handling (empty `data/`, Qdrant unreachable, Ollama not yet pulled the model).
 - Optional stretch (only if time remains): a single static HTML page with a text box calling `/query` — skip entirely if short on time, not required for the portfolio value of this project.
+- Possible points of improvement, as well as a section on how this can escalate, even more so if the possibility of GPU acceleration exists (on my device it cannot happen due to hardware restrictions, but if those did not exist, how could this project be escalated)
 
 ## 7. Explicit Non-Goals (skip these — out of scope)
 
