@@ -1,0 +1,16 @@
+# Secrets — never commit real values. Only .env.example is tracked.
+.env
+
+# Source documents — keep the folder but ignore its contents
+data/*
+!data/.gitkeep
+
+# Eval virtualenv (local only, not containerized)
+eval/.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage

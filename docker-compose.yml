@@ -1,0 +1,41 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  # CPU-only by design: AMD GPU passthrough (Vulkan/ROCm) into a WSL2 Docker
+  # container is unreliable as of mid-2026 (missing /dev/dri, driver mismatches,
+  # ERROR_INCOMPATIBLE_DRIVER). Do not add a `deploy.resources.reservations.devices`
+  # GPU block here without re-validating passthrough works first — see
+  # PROJECT_BRIEF.md section 3.
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ./app
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      - qdrant
+      - ollama
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+  qdrant_data:
