@@ -1,0 +1,142 @@
+[
+  {
+    "id": "weo-01",
+    "question": "What is the IMF's projected global growth rate for 2026 in the July 2026 WEO Update?",
+    "expected_answer": "3.0 percent",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["3.0", "percent", "2026"]
+  },
+  {
+    "id": "weo-02",
+    "question": "What global growth rate is projected for 2027?",
+    "expected_answer": "3.4 percent",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["3.4", "percent", "2027"]
+  },
+  {
+    "id": "weo-03",
+    "question": "How is global headline inflation expected to change from 2025 to 2026?",
+    "expected_answer": "Global headline inflation is expected to rise from 4.1 percent in 2025 to 4.7 percent in 2026.",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["4.1", "4.7", "inflation"]
+  },
+  {
+    "id": "weo-04",
+    "question": "What average petroleum spot price per barrel is assumed for 2026 in the July 2026 WEO Update?",
+    "expected_answer": "$89 per barrel (approximately $89.27)",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["89", "barrel", "oil"]
+  },
+  {
+    "id": "weo-05",
+    "question": "What is the projected US GDP growth rate for 2026?",
+    "expected_answer": "2.3 percent",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["2.3", "United States", "percent"]
+  },
+  {
+    "id": "weo-06",
+    "question": "What is China's projected growth rate for 2026 according to the WEO Update?",
+    "expected_answer": "4.6 percent",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["4.6", "China"]
+  },
+  {
+    "id": "weo-07",
+    "question": "Which four economies are identified as the top net exporters of AI-related hardware?",
+    "expected_answer": "Taiwan Province of China, Korea, Thailand, and Malaysia",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["Taiwan", "Korea", "Thailand", "Malaysia"]
+  },
+  {
+    "id": "weo-08",
+    "question": "What growth rate is projected for the euro area in 2026?",
+    "expected_answer": "0.9 percent",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["0.9", "euro area"]
+  },
+  {
+    "id": "weo-09",
+    "question": "When do IMF staff assume the reopening of the Strait of Hormuz begins, and when do conditions return to prewar levels?",
+    "expected_answer": "Reopening is assumed to begin in mid-July 2026, with conditions broadly returning to the prewar state by March 2027.",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["Strait of Hormuz", "mid-July", "March 2027"]
+  },
+  {
+    "id": "weo-10",
+    "question": "How much is world trade volume growth projected to slow to in 2026, from 5.0 percent in 2025?",
+    "expected_answer": "3.5 percent",
+    "expected_source": "world_economic_outlook.pdf",
+    "expected_keywords": ["3.5", "trade volume"]
+  },
+  {
+    "id": "gfsr-01",
+    "question": "What is the full title/theme of the April 2026 Global Financial Stability Report?",
+    "expected_answer": "Global Financial Markets Confront the War in the Middle East and Amplification Risks",
+    "expected_source": "global_financial_stability_report.pdf",
+    "expected_keywords": ["Amplification Risks", "Middle East"]
+  },
+  {
+    "id": "gfsr-02",
+    "question": "By how much have global equity prices declined since February 2026, according to the GFSR Executive Summary?",
+    "expected_answer": "8 percent",
+    "expected_source": "global_financial_stability_report.pdf",
+    "expected_keywords": ["8 percent", "equity"]
+  },
+  {
+    "id": "gfsr-03",
+    "question": "Who is the IMF's Financial Counsellor who signs the GFSR's foreword?",
+    "expected_answer": "Tobias Adrian",
+    "expected_source": "global_financial_stability_report.pdf",
+    "expected_keywords": ["Tobias Adrian"]
+  },
+  {
+    "id": "gfsr-04",
+    "question": "What facility does the Federal Reserve have that helps support market functioning during stress, mentioned in the GFSR?",
+    "expected_answer": "The Federal Reserve's Standing Repo Facility",
+    "expected_source": "global_financial_stability_report.pdf",
+    "expected_keywords": ["Standing Repo Facility", "Federal Reserve"]
+  },
+  {
+    "id": "gfsr-05",
+    "question": "What shape do emerging market net capital flows take according to the GFSR, and which asset class do they favor?",
+    "expected_answer": "A K-shaped pattern, favoring bonds rather than foreign direct investment or equities",
+    "expected_source": "global_financial_stability_report.pdf",
+    "expected_keywords": ["K-shaped", "bonds"]
+  },
+  {
+    "id": "fm-01",
+    "question": "What was global gross government debt as a percentage of GDP in 2025, according to the Fiscal Monitor?",
+    "expected_answer": "Nearly 94 percent of GDP",
+    "expected_source": "fiscal_monitor.pdf",
+    "expected_keywords": ["94 percent", "debt"]
+  },
+  {
+    "id": "fm-02",
+    "question": "By what year is global government debt projected to reach 100 percent of GDP?",
+    "expected_answer": "2029",
+    "expected_source": "fiscal_monitor.pdf",
+    "expected_keywords": ["2029", "100 percent"]
+  },
+  {
+    "id": "fm-03",
+    "question": "What is the United States' general government deficit as a share of GDP, per the Fiscal Monitor?",
+    "expected_answer": "7 to 8 percent of GDP",
+    "expected_source": "fiscal_monitor.pdf",
+    "expected_keywords": ["7 percent", "8 percent", "deficit"]
+  },
+  {
+    "id": "fm-04",
+    "question": "What is US gross debt projected to reach by 2031?",
+    "expected_answer": "142 percent of GDP",
+    "expected_source": "fiscal_monitor.pdf",
+    "expected_keywords": ["142 percent", "2031"]
+  },
+  {
+    "id": "fm-05",
+    "question": "In a scenario of prolonged Middle East conflict, by how many percentage points could global debt-at-risk increase?",
+    "expected_answer": "An additional 4 percentage points",
+    "expected_source": "fiscal_monitor.pdf",
+    "expected_keywords": ["4 percentage points", "debt-at-risk"]
+  }
+]
