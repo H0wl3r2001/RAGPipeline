@@ -160,13 +160,11 @@ docker run --rm --network ragpipeline_default \
 
 Tests: `/health` returns ok, `/ingest` returns chunks > 0, `/query` returns answer + sources, empty question returns 400.
 
-## Design Decision: Word-Based Chunking vs. Tokenizer-Based Chunking
+## Why word-based chunking instead of a tokenizer
 
-The PROJECT_BRIEF specified fixed-size chunking at "500 tokens / 50 overlap." Implementing this literally would require a tokenizer — either `tiktoken` (OpenAI-specific, extra dependency) or a HuggingFace tokenizer pulled in via `sentence-transformers` or `transformers` (a heavy dependency tree). The brief's section 8 explicitly says "keep dependencies minimal — every added package should be justified."
+The brief called for "500 tokens / 50 overlap" chunks. Doing that means either tiktoken (built for OpenAI's tokenizers, not really a fit here) or pulling in sentence-transformers/transformers just to count tokens, which is a heavy dependency for something this small. I chunk by words instead (~500 words / 50 overlap), which is a rough proxy of roughly 1.3 words per token in English, so chunks come out a bit bigger than "500 tokens" actually means.
 
-The decision was to use **word-based chunking** (~500 words / 50-word overlap) as a proxy, avoiding any tokenizer dependency. The tradeoff: words ≠ tokens. For English text, ~500 words approximates ~670 tokens (a ~1.3x ratio), so chunks are larger than the literal "500 tokens" target. This means fewer chunks per document (coarser retrieval) and slightly longer prompts (more context per chunk). The alternative — adding a tokenizer just for chunking — would have been a cleaner implementation of the spec but violated the minimal-dependencies principle for a portfolio project.
-
-Phase 4 evaluation validated the decision: retrieval hit-rate was **100%** (20/20 questions retrieved the correct source document), confirming the imprecision didn't hurt retrieval quality in practice. The 65% answer relevance score was driven by the model not finding specific details within chunks (e.g., a specific page number or table value), not by retrieving the wrong document — which is a chunking granularity issue, not a tokenization issue. Semantic chunking or a tokenizer-based approach would be the natural next improvement.
+Did it matter? Retrieval hit-rate was 100% (20/20), so the model always found the right document. The 65% relevance score comes from another reason: it sometimes misses a specific page number or table value inside a chunk it retrieved correctly. That's a granularity problem, not a tokenization one, which is what the next round of work targets.
 
 ## Tuning Results (Phase 7a — chunk size / overlap / TOP_K sweep)
 
@@ -302,39 +300,28 @@ Per-question breakdown vs Phase 7b's reference scores for the same 5 questions (
 
 ## Possible Points of Improvement
 
-- **Semantic chunking**: Split at sentence/paragraph boundaries instead of fixed word counts. Would reduce mid-sentence cuts and improve answer relevance for specific-detail questions.
-- **BM25 at scale**: Phase 7b scores BM25 over the full collection at query time — fine at ~278 chunks. Above ~10k chunks, switch to dense-KNN top-N + BM25 rerank the narrow candidate set, or persist a tokenized BM25 corpus to disk and load at startup.
-- **Tokenizer-based chunk sizing**: Replace the word proxy with actual token counts (e.g. via `tiktoken` or the model's native tokenizer) for precise control over prompt length.
-- **Chunk overlap tuning**: The Phase 7a sweep above found 50→100 words overlap closes most of the diagnosed gap on this corpus; per-document-type tuning (e.g. table-heavy PDFs) would be a natural next pass.
-- **Re-ranking**: Add a cross-encoder re-ranker between retrieval and generation to improve the order of retrieved chunks.
-- **Larger or domain-specific embedding model**: `nomic-embed-text` is a good general-purpose model; a domain-specific model could improve retrieval for specialized documents.
-- **Streaming responses**: `/query` currently waits for the full answer before returning. Server-Sent Events or WebSocket streaming would improve perceived latency.
-- **Caching**: Cache query embeddings and answers to avoid re-computing identical questions.
-- **Retrieval-time keyword presence check** (from Phase 6 diagnostics): `gfsr-02`/`gfsr-03` returned the right *kind* of chunk without surfacing the exact keyword strings ("8 percent", "Tobias Adrian") needed for the eval scorer. A query-aware guard that, when tokens from `expected_keywords` are missing from the top-k, boosts the top-k to include the chunks that contain them, would close the gap without changing prompts.
-- **Strip the CoT "Answer:" prefix in v3**: `app/prompts/v3_cot.txt` currently tells the model to emit `Answer: <text>`. Eval's keyword scorer then sees `"Answer: $89.27…"`, which works for this scorer but is brittle for downstream consumers. A cleaner v4 would keep the reasoning scaffold but end the prompt at "`Final short answer:`".
-- **Multi-format support**: Extend beyond PDF/Markdown/txt (e.g. DOCX, HTML, EPUB) — deliberately out of scope per the brief but straightforward to add.
+- **Semantic chunking** — right now chunks cut wherever the word count
+  runs out, mid-sentence included. Splitting on sentence/paragraph
+  boundaries first would probably help more than anything else here.
+- **Tokenizer-based sizing** — swap the word-count proxy for real token
+  counts once the dependency cost is worth it.
+- **Overlap tuning** — 50 words (~10%) was a starting guess, not a
+  tuned number.
+- **Re-ranking** — a cross-encoder pass between retrieval and
+  generation.
+- **Bigger/domain embedding model** — nomic-embed-text is fine as a
+  generalist, but a domain-specific model would help on specialized docs.
+- **Streaming** — `/query` blocks until the full answer is ready;
+  SSE/WebSockets would fix perceived latency.
+- **Caching** — repeat questions shouldn't re-embed and re-generate
+  from scratch.
+- **More file types** — DOCX/HTML/EPUB, skipped on purpose to keep
+  scope tight.
 
 ## How This Project Could Escalate (If GPU Acceleration Were Available)
 
-This project runs Ollama **CPU-only** because AMD GPU passthrough into WSL2 Docker containers is unreliable as of mid-2026 (see `PROJECT_BRIEF.md` section 3). If that hardware constraint didn't exist — for example, on a machine with an NVIDIA GPU and working CUDA passthrough into Docker, or on a native Linux host with AMD ROCm support — the project could be escalated in several ways:
-
-**1. GPU-accelerated inference**
-The most immediate change: add a `deploy.resources.reservations.devices` GPU block to the `ollama` service in `docker-compose.yml`. With GPU acceleration, a 7-8B model generates answers in 1-3 seconds instead of 30-50 seconds per query. This unlocks interactive use cases (real-time chat, live demos) that aren't practical at CPU speeds. It also makes larger models viable — `qwen2.5:14b` or `llama3.1:70b` instead of `qwen2.5:7b` — which would meaningfully improve answer quality.
-
-**2. Larger embedding and LLM models**
-With GPU VRAM available (e.g. the 16GB on the RX 9060 XT in the target hardware), the embedding model could be upgraded to a larger one (e.g. `nomic-embed-text` → a 1.5B parameter embedding model) for better retrieval precision. The LLM could scale to 14B-70B parameters, dramatically improving the model's ability to synthesize complex answers from retrieved context.
-
-**3. Concurrent requests**
-CPU-only inference effectively serializes generation (one query at a time on 8 cores). GPU inference with sufficient VRAM can handle multiple concurrent requests or batch them, enabling multi-user usage. This would warrant adding async queueing, connection pooling, and rate limiting to the FastAPI app.
-
-**4. Larger document sets**
-The current eval uses 3 PDFs (~20MB, 278 chunks). A GPU-accelerated setup could handle thousands of documents with millions of chunks — ingestion embedding would be 10-50x faster, and retrieval + generation would remain interactive. This would require Qdrant configuration tuning (HNSW parameters, quantization, shard count) and possibly moving Qdrant to a dedicated machine.
-
-**5. Advanced RAG patterns**
-With faster inference, more sophisticated RAG architectures become practical: multi-hop retrieval (query → retrieve → generate follow-up query → retrieve again), query rewriting, and agentic patterns where the model decides when to search. These require multiple LLM calls per user question — impractical at 50s/call on CPU, but feasible at 2s/call on GPU.
-
-**6. Fine-tuning**
-With a GPU, fine-tuning the LLM on domain-specific Q/A pairs becomes possible (LoRA/QLoRA on a single GPU). This is explicitly out of scope for the current project but would be the natural escalation path for improving answer quality on a specialized document set.
+This runs CPU-only because AMD GPU passthrough into WSL2 Docker isn't reliable right now (see PROJECT_BRIEF.md section 3). The first change I'd make with a working GPU is obvious: drop a GPU reservation into docker-compose.yml and swap qwen2.5:7b for something bigger — generation goes from ~30-50s to 1-3s, which is the actual difference between "demo" and "something you'd use." Multi-hop retrieval and bigger embedding models only start making sense once a single LLM call isn't the
+bottleneck.
 
 ## Configuration
 
