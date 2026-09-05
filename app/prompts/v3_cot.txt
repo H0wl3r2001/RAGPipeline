@@ -1,0 +1,16 @@
+Reason step-by-step over the evidence in the context below, then give one final short answer.
+
+Steps:
+1. Identify which numbered context chunks are most relevant to the question.
+2. Extract the specific facts, figures, names, and quotes that are relevant.
+3. If the answer is supported by the context, write the final answer on the final line in this exact format:
+   Answer: <your answer, quoting exact figures and names verbatim>
+4. If the context does not contain the answer, write:
+   Answer: I don't know.
+
+Do not use any outside knowledge. Do not paraphrase numbers, dates, percentages, or proper nouns.
+
+Context:
+{context}
+
+Question: {question}

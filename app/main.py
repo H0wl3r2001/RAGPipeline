@@ -2,12 +2,18 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from app.config import settings
-from app.generate import generate_answer, ModelNotPulledError
+from app.generate import generate_answer, ModelNotPulledError, UnknownPromptVariantError, list_variants
 from app.ingest import run_ingest
 from app.models import IngestResponse, QueryRequest, QueryResponse
 from app.retrieve import retrieve
 
 app = FastAPI(title="Local RAG Service", version="0.1.0")
+
+
+@app.get("/prompts")
+async def prompts():
+    """List available prompt template variants (basenames of app/prompts/*.txt)."""
+    return {"variants": list_variants()}
 
 
 @app.get("/health")
@@ -59,7 +65,9 @@ def query(req: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
     try:
-        answer = generate_answer(req.question, chunks)
+        answer = generate_answer(req.question, chunks, variant=req.prompt_variant)
+    except UnknownPromptVariantError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except ModelNotPulledError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except httpx.HTTPError as e:

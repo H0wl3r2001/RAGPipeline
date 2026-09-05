@@ -12,6 +12,7 @@ class IngestResponse(BaseModel):
 
 class QueryRequest(BaseModel):
     question: str
+    prompt_variant: str | None = None
 
 
 class Source(BaseModel):

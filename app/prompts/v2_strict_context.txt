@@ -1,0 +1,8 @@
+Use ONLY information explicitly stated in the context below. Quote exact figures and named entities verbatim — do not paraphrase numbers, dates, percentages, or proper nouns. If the context does not contain the information needed, say "I don't know." Do not use any outside knowledge.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer (quote exact figures and names verbatim):
