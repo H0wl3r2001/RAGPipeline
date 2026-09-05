@@ -8,6 +8,10 @@ data/*
 # Eval virtualenv (local only, not containerized)
 eval/.venv/
 
+# Timestamped eval result JSON files (Phase 6). Folder stays in the repo
+# so eval.py can write to it without git-tracking the outputs.
+eval/results/
+
 # Python
 __pycache__/
 *.pyc

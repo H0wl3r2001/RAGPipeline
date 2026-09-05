@@ -1,0 +1,10 @@
+Answer the question using only the context below.
+If the context does not contain enough information to answer, say "I don't know."
+Do not use any outside knowledge.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     chunk_words: int = 500
     overlap_words: int = 50
     rrf_k: int = 60
+    prompt_variant: str = "v1_baseline"
     data_dir: str = "/data"
 
     @property

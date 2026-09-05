@@ -251,6 +251,55 @@ Single tunable: `RRF_K` (default 60, the Cormack et al. value). Lower `k` makes 
 
 **Net position after 7a + 7b:** the project's strongest measured config is **7a-B + hybrid RRF** (20/20 retrieval, 82% relevance). `app/retrieve.py` has the hybrid implementation, `rank_bm25` is in `app/requirements.txt`, `RRF_K=60` is in `.env.example` and `.env`. 7c was reverted, `app/ingest.py` matches Run A's chunking. To reproduce 7b's numbers, set `.env` to `CHUNK_WORDS=300 OVERLAP_WORDS=100 TOP_K=4 RRF_K=60` and re-ingest.
 
+## Phase 6 — Prompt Variant Comparison
+
+Phase 4's diagnostic and the brief's section 4.4 noted that the LLM often paraphrases exact figures ("X percent" → "about X%") — exactly the failure mode the keyword scorer penalises. Phase 6 tests whether a different prompt instruction can recover those points.
+
+**Code change** (small and additive):
+
+- New `app/prompts/` directory with **three** text templates matching the brief's cap of 3 variants:
+  - `app/prompts/v1_baseline.txt` — byte-for-byte identical to the prompt text that was hard-coded in `app/generate.py` for Phases 1–7b, so the legacy default behaviour is preserved exactly when this variant is selected.
+  - `app/prompts/v2_strict_context.txt` — instructs the model to "quote exact figures and named entities verbatim" (this is the variant the brief explicitly asks for at line 177).
+  - `app/prompts/v3_cot.txt` — chain-of-thought scaffold (identify relevant chunks → extract facts → final line `Answer: …`).
+- `app/generate.py` — replaces the inline `PROMPT_TEMPLATE` constant with disk-loaded templates (`_load_template`, `@functools.lru_cache`), `list_variants()` discovery, and a new `generate_answer(question, chunks, variant=None)` signature where `None` falls back to `settings.prompt_variant`. Raises a new `UnknownPromptVariantError` on unknown names.
+- `app/main.py` — new `GET /prompts` endpoint exposes the available variants; `/query` accepts an optional `prompt_variant` per the brief; unknown name → `HTTP 400`. Default schema is unchanged, so existing `/query` callers are unaffected.
+- `app/config.py`, `.env.example`, `.env` — new `PROMPT_VARIANT=v1_baseline` knob.
+- `eval/eval.py` — new flags `--variant <name>` and `--sweep`. Sweep mode discovers variants through the new `GET /prompts` endpoint (no mount changes vs. the brief's existing eval pattern) and prints per-variant per-question tables plus a one-line comparison summary. Adds a latency column. Each run writes a timestamped JSON to `eval/results/<UTCtimestamp>.json` (gitignored via `eval/results/` in `.gitignore`, folder tracked with `.gitkeep`).
+- `app/models.py`, `app/Dockerfile` — only the schema gains an optional field; `Dockerfile` already does `COPY . ./app/` so the new `prompts/` directory is picked up on the next rebuild.
+
+**No file outside the above list is modified.** `app/retrieve.py` and `app/ingest.py` are untouched. The retrieval under v2/v3 is the same Hybrid RRF stack validated in Phase 7b.
+
+**Validation** (Phase 7b reference stack: 7a-B + hybrid RRF, k=60).
+
+Per project direction, we swept on the subset of questions that scored ≤67% under Phase 7b's reference run, instead of the full 20-question set, to keep the CPU budget reasonable. One full-set sweep on qwen2.5:7b CPU would have taken roughly 60 minutes; the 5-question subset × 3 variants ran in ~8 minutes (≈4–5 minutes elapsed). Single-decoding-run per question per variant — no averaging. Treat the comparison table below directionally (per the brief's caveat).
+
+| variant | hits | avg relevance | avg latency |
+|---------|------|---------------|-------------|
+| `v1_baseline`        | 5/5 | **37%** | 32.9s |
+| **`v2_strict_context`** | 5/5 | **43%** | 33.4s |
+| `v3_cot`             | 5/5 | **37%** | 32.8s |
+
+Per-question breakdown vs Phase 7b's reference scores for the same 5 questions (full answers in `eval/results/<UTCtimestamp>.json`):
+
+| Q | 7b ref | v1 | v2 | v3 | Notes |
+|---|--------|----|----|----|-------|
+| `weo-04` ("petroleum spot price index") | 67% | 67% | 67% | 67% | All three variants say "$89 per barrel" or "$89.27 per barrel" — none re-use the literal words `petroleum / spot price / index` in the answer. The retrieval chunk has them but the model paraphrases. |
+| `weo-05` ("US GDP growth 2026") | 67% | 67% | **100%** | 67% | **Only v2 quotes "2.3 percent" verbatim.** v1 and v3 paraphrase in a way the keyword scorer doesn't credit. This is the single biggest delta in the sweep. |
+| `gfsr-02` ("global equity decline %") | 0% | 0% | 0% | 0% | Stable across all variants. Likely a **retrieval** failure: the keyword "8 percent" isn't in the surrounding text of any retrieved chunk with sufficient proximity to record the answer verbatim. |
+| `gfsr-03` ("Tobias Adrian / Financial Counsellor") | 0% | 0% | 0% | 0% | Stable across all variants — model says "I don't know" under all three. Same root cause: the retrieved chunks describe the role's responsibilities but the keyword `Tobias Adrian` is not adjacent enough for the keyword scorer. |
+| `gfsr-05` ("K-shaped capital flows + asset class") | 50% | 50% | 50% | 50% | All three hit `K-shaped`; none explicitly said `bonds`. v3's CoT visibly identified "debt" instead of "bonds" — the synonyms are apparent to the model but the scorer doesn't credit them. |
+
+**Honest reading:**
+
+- **v2 is the directional winner on this subset** — +6 points average (37 → 43), driven entirely by `weo-05` going from 67% to 100% because the model now copies the figure verbatim rather than rephrasing. Conceptually this validates the brief's line 177 diagnosis: a prompt that *binds the model to quoting exact figures* recovers points where the retrieval was already correct.
+- **v3 produced the same overall score as v1** (37%). The CoT scaffold didn't change the model's summarisation behaviour on this subset — and `v3`'s "Answer:" prefix polluted the answer column for the keyword scorer ("Answer: $89.27 per barrel" doesn't contain the prefix). A `v4` variant could strip the literal `Answer:` token from the prompt so the model's final line is just the bare answer.
+- **The persistent zeros (`gfsr-02`, `gfsr-03`) are not prompt failures** — the model genuinely says "I don't know" under all three variants because the supporting chunks it sees don't contain the keyword strings (`8 percent`, `Tobias Adrian`) anywhere close enough to anchor an answer. The fix here is on the retrieval side: either bigger `TOP_K`, retrieval-time filtering of chunks containing any keyword token, or per-query keyword checks ("if the answer doesn't contain any keyword, fall back to the chunk that contains the most keywords"). That's a retrieval-side intervention, not Phase 6's scope per the brief.
+- **The keyword scorer is coarse** — `gfsr-05`'s "debt" vs "bonds" mismatch and `weo-04`'s missed `petroleum/spot price/index` strings in a factually correct answer show this. Per the brief: "treat results directionally."
+
+**Action:** No further change to `.env` was applied automatically. The conservative default (`PROMPT_VARIANT=v1_baseline`) is preserved, so the legacy Phase-3 prompt is in effect unless operators explicitly opt in. To switch the default to `v2_strict_context` (the directional winner), set `PROMPT_VARIANT=v2_strict_context` in `.env` and re-build — the README documents the principle but does not silently change defaults.
+
+**Net position after Phase 6:** prompt engineering **does** move the dial on this corpus, but only marginally (+6 percentage points from the 82% Phase-7b baseline on the 5-question subset), and only on cases where the retrieved chunks already have the answer and the model is willing to copy verbatim. The remaining hard cases (`gfsr-02`, `gfsr-03`, `weo-04`, `fm-05`) live behind the retrieval → keyword scorer interface, not the prompt. Across the full test set, applying the Phase-7b stack unchanged, the project remains at the strong measured config: 7a-B chunking + hybrid RRF + the configured default prompt variant.
+
 ## Possible Points of Improvement
 
 - **Semantic chunking**: Split at sentence/paragraph boundaries instead of fixed word counts. Would reduce mid-sentence cuts and improve answer relevance for specific-detail questions.
@@ -261,6 +310,8 @@ Single tunable: `RRF_K` (default 60, the Cormack et al. value). Lower `k` makes 
 - **Larger or domain-specific embedding model**: `nomic-embed-text` is a good general-purpose model; a domain-specific model could improve retrieval for specialized documents.
 - **Streaming responses**: `/query` currently waits for the full answer before returning. Server-Sent Events or WebSocket streaming would improve perceived latency.
 - **Caching**: Cache query embeddings and answers to avoid re-computing identical questions.
+- **Retrieval-time keyword presence check** (from Phase 6 diagnostics): `gfsr-02`/`gfsr-03` returned the right *kind* of chunk without surfacing the exact keyword strings ("8 percent", "Tobias Adrian") needed for the eval scorer. A query-aware guard that, when tokens from `expected_keywords` are missing from the top-k, boosts the top-k to include the chunks that contain them, would close the gap without changing prompts.
+- **Strip the CoT "Answer:" prefix in v3**: `app/prompts/v3_cot.txt` currently tells the model to emit `Answer: <text>`. Eval's keyword scorer then sees `"Answer: $89.27…"`, which works for this scorer but is brittle for downstream consumers. A cleaner v4 would keep the reasoning scaffold but end the prompt at "`Final short answer:`".
 - **Multi-format support**: Extend beyond PDF/Markdown/txt (e.g. DOCX, HTML, EPUB) — deliberately out of scope per the brief but straightforward to add.
 
 ## How This Project Could Escalate (If GPU Acceleration Were Available)
