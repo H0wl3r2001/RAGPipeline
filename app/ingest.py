@@ -17,12 +17,9 @@ logger = logging.getLogger(__name__)
 EMBED_DIMENSION = 768
 
 # Baseline chunking strategy: fixed-size word windows with overlap.
-# ~500 words/chunk with 50-word overlap approximates the "500 tokens / 50 overlap"
-# target without pulling in a tokenizer dependency. This is intentionally simple
-# and swappable — semantic chunking or a tokenizer-based approach can replace it
-# later without changing the rest of the pipeline.
-CHUNK_WORDS = 500
-OVERLAP_WORDS = 50
+# Defaults ~500 words/chunk with 50-word overlap approximate the "500 tokens /
+# 50 overlap" target without pulling in a tokenizer dependency (see README
+# design-decision section). Overridable via .env: CHUNK_WORDS / OVERLAP_WORDS.
 
 
 def _load_pdf(path: Path) -> str:
@@ -69,11 +66,11 @@ def chunk_text(text: str, source_file: str) -> list[dict]:
         return []
 
     chunks: list[dict] = []
-    step = CHUNK_WORDS - OVERLAP_WORDS
+    step = settings.chunk_words - settings.overlap_words
     chunk_index = 0
     start = 0
     while start < len(words):
-        end = start + CHUNK_WORDS
+        end = start + settings.chunk_words
         chunk = {
             "source_file": source_file,
             "chunk_index": chunk_index,

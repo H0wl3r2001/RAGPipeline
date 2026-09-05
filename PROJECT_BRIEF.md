@@ -143,7 +143,38 @@ Work through these in order. Each phase should leave the system in a runnable st
 - `README.md`: architecture summary (reuse section 4 diagram), setup steps, one paragraph on a real design decision made (e.g. "chose fixed-size chunking over semantic chunking for simplicity; noted as a possible improvement"), and sample `curl` commands.
 - Basic error handling (empty `data/`, Qdrant unreachable, Ollama not yet pulled the model).
 - Optional stretch (only if time remains): a single static HTML page with a text box calling `/query` — skip entirely if short on time, not required for the portfolio value of this project.
-- Possible points of improvement, as well as a section on how this can escalate, even more so if the possibility of GPU acceleration exists (on my device it cannot happen due to hardware restrictions, but if those did not exist, how could this project be escalated)
+
+### Phase 6 — Prompt Variant Comparison (extension)
+
+**Goal:** extend the existing eval harness to compare a small number of prompt templates against the same fixed test set, so a choice between them is evidence-based. This reuses Phase 4's infrastructure — it is not a general-purpose prompt-versioning/A-B-testing platform, and should not grow into one within this project.
+
+**Non-goals (explicit):** no statistical significance testing, no live traffic-splitting/serving, no database, no dashboard/UI, no more than 3 prompt variants. A reusable, general-purpose experimentation platform is a legitimately separate project if wanted later — building it here would couple something general to something RAG-specific and blow the time budget for a marginal portfolio gain.
+
+**Files:**
+- `app/prompts/` — plain text template files, max 3 (e.g. `v1_baseline.txt`, `v2_strict_context.txt`, `v3_cot.txt`). Keep to this cap: CPU-only generation means each full sweep over the 15-20 question test set costs one generation call per question per variant.
+- `app/generate.py` — accept a `prompt_variant` parameter; default comes from `.env` (`PROMPT_VARIANT`, defaulting to whichever variant matches the current Phase 3 prompt so nothing changes unless explicitly requested).
+- `app/main.py` — `/query` request schema gains an optional `prompt_variant` field; omitted = configured default; unknown name → 400.
+- `eval/eval.py` — add a sweep mode: run the full test set once per variant found in `app/prompts/`, reusing the existing retrieval/hit-rate logic unchanged (retrieval doesn't depend on the generation prompt), computing the existing keyword-relevance score per variant. Print one comparison table: `variant | hit-rate | relevance-score | avg latency`. Optionally write timestamped results to `eval/results/<timestamp>.json` (gitignored) as a lightweight run history — no database needed for this.
+- README: add a short note that keyword/substring relevance scoring is coarse and may not sharply differentiate prompt quality — treat sweep results directionally, not as statistically rigorous, consistent with Phase 4's original scoring choice.
+
+### Phase 7 — Retrieval Quality Improvements (targets the diagnosed relevance gap)
+
+**Diagnosis this phase exists to fix:** the deployed eval run showed 100% retrieval hit-rate (20/20 — correct source document always found) but only 65% answer relevance, with the gap attributed to the model missing specific details (page numbers, table values) *within* correctly-retrieved chunks. This is a chunk-content/retrieval-precision problem, not a wrong-document problem — fixes should target that specifically, not general RAG polish.
+
+**7a — Chunk size / overlap / TOP_K sweep (cheap, config-only).**
+Re-run `eval/eval.py` against the existing 20-question test set at 2-3 alternate `.env` configurations (e.g. smaller word window ~300 words, higher overlap ~75-100 words, `TOP_K` 4→6). No code changes, no new dependency — pure parameter sweep using infrastructure that already exists. Record hit-rate and relevance for each configuration in a new README "Tuning results" subsection.
+
+**7b — Hybrid retrieval: dense + keyword fusion (main fix, moderate effort).**
+Dense embeddings are known to underperform on exact numeric/tabular lookups — precisely the diagnosed failure. Add a lightweight sparse keyword scorer via `rank_bm25` (pure Python, no torch/transformers — consistent with the brief's minimal-dependency principle) alongside the existing Qdrant cosine search in `app/retrieve.py`. Combine via a simple weighted sum or reciprocal rank fusion of the two rankings, return the fused top-k. This is the highest-leverage change for the diagnosed problem — call it out explicitly as such in the README design-decision write-up, with before/after eval numbers.
+
+**7c — Page/section-aware chunking (cheap, complements 7b).**
+For PDFs: chunk within page boundaries where possible so a table or figure isn't blindly split by the fixed-word window crossing a page break. For Markdown: split on heading boundaries before applying the word-window, so a chunk doesn't start mid-section. Change to the existing chunking loop in `ingest.py` — no new dependency.
+
+**Explicitly deferred, with reasoning (do not build this weekend):**
+- *Cross-encoder re-ranking* — real potential uplift, but requires `sentence-transformers`/`transformers`, the exact heavy dependency tree Phase 2's design decision already rejected once for the same minimal-dependency reason, and adds another CPU-bound inference step to an already-slow local pipeline. Revisit only if 7a-7c don't close the gap.
+- *Streaming responses / caching* — legitimate polish, but cosmetic relative to the diagnosed relevance problem; doesn't move eval numbers, so it's lower priority when the evidence for a write-up needs to be eval-driven, not demo-feel-driven.
+
+**Suggested order for the weekend:** 7a → 7c → 7b, then Phase 6 (prompt variant comparison) — one prompt variant should explicitly instruct the model to look for exact figures/quotes/page references in context, since that pairs directly with what 7b/7c are fixing. Finish with a full eval re-run and a before/after numbers table in the README.
 
 ## 7. Explicit Non-Goals (skip these — out of scope)
 
