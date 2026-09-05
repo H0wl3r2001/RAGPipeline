@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     qdrant_collection: str = "rag_docs"
     embed_model: str = "nomic-embed-text"
     top_k: int = 4
+    chunk_words: int = 500
+    overlap_words: int = 50
+    rrf_k: int = 60
     data_dir: str = "/data"
 
     @property
